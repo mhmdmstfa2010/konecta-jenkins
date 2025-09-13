@@ -1,0 +1,69 @@
+pipeline {
+    agent any
+
+    triggers {
+        githubPush()
+    }
+
+    stages {
+        stage('Terraform Init') {
+            steps {
+                dir('terraform') {
+                    sh 'terraform init -backend-config=backend.tf'
+                }
+            }
+        }
+
+        stage('Terraform Apply') {
+            steps {
+                dir('terraform') {
+                    withCredentials([usernamePassword(credentialsId: 'aws-creds',
+                        usernameVariable: 'AWS_ACCESS_KEY_ID',
+                        passwordVariable: 'AWS_SECRET_ACCESS_KEY')]) {
+                        sh '''
+                            terraform apply -auto-approve \
+                              -var 'instance_type=t3.micro' \
+                              -var 'tags={"Name":"ci-ephemeral","lifespan":"ephemeral","owner":"jenkins"}'
+                        '''
+                    }
+                }
+            }
+        }
+
+        stage('Get EC2 IP') {
+            steps {
+                dir('terraform') {
+                    script {
+                        EC2_IP = sh(
+                            script: "terraform output -raw public_ip",
+                            returnStdout: true
+                        ).trim()
+                        echo "EC2 IP: ${EC2_IP}"
+                        writeFile file: 'EC2_IP.txt', text: EC2_IP
+                        env.EC2_IP = EC2_IP   
+                    }
+                }
+            }
+        }
+
+        stage('Ansible Configure') {
+            steps {
+                withCredentials([file(credentialsId: 'AWS_SSH_FILE', variable: 'SSH_KEY_FILE')]) {
+                    script {
+                        ansiblePlaybook(
+                            playbook: 'ansible/playbook.yml',
+                            inventory: env.EC2_IP + ',',   
+                            extras: "-u ec2-user --private-key ${SSH_KEY_FILE}"
+                        )
+                    }
+                }
+            }
+        }
+    }
+
+    post {
+        success {
+            archiveArtifacts artifacts: 'EC2_IP.txt', fingerprint: true
+        }
+    }
+}

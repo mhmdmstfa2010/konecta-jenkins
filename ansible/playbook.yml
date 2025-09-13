@@ -1,0 +1,14 @@
+- hosts: all
+  become: true
+  tasks:
+    - name: Install Docker on RedHat
+      yum:
+        name: docker
+        state: present
+      when: ansible_os_family == 'RedHat'
+
+    - name: Ensure Docker is started
+      service:
+        name: docker
+        state: started
+        enabled: true

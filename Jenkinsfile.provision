@@ -10,7 +10,7 @@ pipeline {
         stage('Terraform Init') {
             steps {
                 dir('terraform') {
-                    withCredentials([usernamePassword(credentialsId: 'aws-creds',
+                    withCredentials([usernamePassword(credentialsId: 'AWS_Creds',
                         usernameVariable: 'AWS_ACCESS_KEY_ID',
                         passwordVariable: 'AWS_SECRET_ACCESS_KEY')]) {
                         sh 'terraform init -backend-config=backend.hcl'
@@ -22,7 +22,7 @@ pipeline {
         stage('Terraform Apply') {
             steps {
                 dir('terraform') {
-                    withCredentials([usernamePassword(credentialsId: 'aws-creds',
+                    withCredentials([usernamePassword(credentialsId: 'AWS_Creds',
                         usernameVariable: 'AWS_ACCESS_KEY_ID',
                         passwordVariable: 'AWS_SECRET_ACCESS_KEY')]) {
                         sh '''

@@ -60,7 +60,7 @@ pipeline {
 
     post {
         success {
-            archiveArtifacts artifacts: 'EC2_IP.txt', fingerprint: true
+            archiveArtifacts artifacts: 'terraform/EC2_IP.txt', fingerprint: true
         }
     }
 }

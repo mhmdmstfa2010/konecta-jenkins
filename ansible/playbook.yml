@@ -12,3 +12,11 @@
         name: docker
         state: started
         enabled: true
+    
+    - name: Add ec2-user to docker group
+      user:
+        name: ec2-user
+        groups: docker
+        append: yes
+      when: ansible_os_family == 'RedHat'
+

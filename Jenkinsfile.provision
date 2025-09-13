@@ -9,7 +9,7 @@ pipeline {
         stage('Terraform Init') {
             steps {
                 dir('terraform') {
-                    sh 'terraform init -backend-config=backend.tf'
+                    sh 'terraform init -backend-config=backend.hcl'
                 }
             }
         }

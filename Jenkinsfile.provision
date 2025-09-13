@@ -57,4 +57,9 @@ pipeline {
             }
         }
     }
+     post {
+        success {
+            archiveArtifacts artifacts: 'EC2_IP.txt', fingerprint: true
+        }
+    }
 }

@@ -23,41 +23,42 @@ pipeline {
             }
         }
 
-       stage('Get EC2 IP') {
+        stage('Get EC2 IP') {
             steps {
                 dir('terraform') {
-                     withCredentials([[$class: 'AmazonWebServicesCredentialsBinding',
-                              credentialsId: 'AWS_Creds']]) {
-                    script {
-                         EC2_IP = sh(
-                             script: "terraform output -raw public_ip",
-                             returnStdout: true
-                          ).trim()
-                          echo "EC2 IP: ${EC2_IP}"
-                          writeFile file: 'EC2_IP.txt', text: EC2_IP
-                          env.EC2_IP = EC2_IP
-                }
-            }
-        }
-    }
-}
-
-
-        stage('Ansible Configure') {
-            steps {
-                withCredentials([file(credentialsId: 'AWS_SSH_FILE', variable: 'SSH_KEY_FILE')]) {
-                    script {
-                        ansiblePlaybook(
-                            playbook: 'ansible/playbook.yml',
-                            inventory: env.EC2_IP + ',',   
-                            extras: "-u ec2-user --private-key ${SSH_KEY_FILE}"
-                        )
+                    withCredentials([[$class: 'AmazonWebServicesCredentialsBinding',
+                                      credentialsId: 'AWS_Creds']]) {
+                        script {
+                            EC2_IP = sh(
+                                script: "terraform output -raw public_ip",
+                                returnStdout: true
+                            ).trim()
+                            echo "EC2 IP: ${EC2_IP}"
+                            writeFile file: 'EC2_IP.txt', text: EC2_IP
+                            env.EC2_IP = EC2_IP
+                        }
                     }
                 }
             }
         }
+
+        stage('Ansible Configure') {
+            environment {
+                ANSIBLE_HOST_KEY_CHECKING = 'False'
+            }
+            steps {
+                withCredentials([file(credentialsId: 'AWS_SSH_FILE', variable: 'SSH_KEY_FILE')]) {
+                    ansiblePlaybook(
+                        playbook: 'ansible/playbook.yml',
+                        inventory: "${env.EC2_IP},",
+                        extras: "-u ec2-user --private-key=${SSH_KEY_FILE} --ssh-extra-args='-o StrictHostKeyChecking=no'"
+                    )
+                }
+            }
+        }
     }
-     post {
+
+    post {
         success {
             archiveArtifacts artifacts: 'EC2_IP.txt', fingerprint: true
         }

@@ -23,21 +23,25 @@ pipeline {
             }
         }
 
-        stage('Get EC2 IP') {
+       stage('Get EC2 IP') {
             steps {
                 dir('terraform') {
+                     withCredentials([[$class: 'AmazonWebServicesCredentialsBinding',
+                              credentialsId: 'AWS_Creds']]) {
                     script {
-                        EC2_IP = sh(
-                            script: "terraform output -raw public_ip",
-                            returnStdout: true
-                        ).trim()
-                        echo "EC2 IP: ${EC2_IP}"
-                        writeFile file: 'EC2_IP.txt', text: EC2_IP
-                        env.EC2_IP = EC2_IP
-                    }
+                         EC2_IP = sh(
+                             script: "terraform output -raw public_ip",
+                             returnStdout: true
+                          ).trim()
+                          echo "EC2 IP: ${EC2_IP}"
+                          writeFile file: 'EC2_IP.txt', text: EC2_IP
+                          env.EC2_IP = EC2_IP
                 }
             }
         }
+    }
+}
+
 
         stage('Ansible Configure') {
             steps {

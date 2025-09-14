@@ -1,0 +1,36 @@
+pipeline {
+    agent any
+
+    environment {
+        AWS_REGION = 'us-east-1' 
+    }
+
+    triggers {
+        cron('TZ=Africa/Cairo 0 0 * * *')
+    }
+
+    stages {
+        stage('Cleanup Ephemeral EC2s') {
+            steps {
+                withCredentials([[$class: 'AmazonWebServicesCredentialsBinding', credentialsId: 'AWS_Creds']]) {
+                    script {
+                        
+                        def instances = sh(script: """
+                            aws ec2 describe-instances \
+                            --filters "Name=tag:lifespan,Values=ephemeral" "Name=instance-state-name,Values=running" \
+                            --query "Reservations[].Instances[].InstanceId" \
+                            --output text --region ${AWS_REGION}
+                        """, returnStdout: true).trim()
+
+                        if (instances) {
+                            echo "Terminating ephemeral instances: ${instances}"
+                            sh "aws ec2 terminate-instances --instance-ids ${instances} --region ${AWS_REGION}"
+                        } else {
+                            echo "No ephemeral instances found."
+                        }
+                    }
+                }
+            }
+        }
+    }
+}

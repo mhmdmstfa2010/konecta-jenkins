@@ -16,11 +16,7 @@ pipeline {
                     sh """
                         docker build -t nginx-ci:${env.BUILD_NUMBER} \
                           --build-arg BUILD_NUMBER=${env.BUILD_NUMBER} \
-                          --build-arg TIMESTAMP=${timestamp} \
-                          -f- . <<'EOF'
-                        FROM nginx:alpine
-                        COPY index.html /usr/share/nginx/html/index.html
-                        EOF
+                          --build-arg TIMESTAMP=${timestamp} .
                     """
                 }
             }

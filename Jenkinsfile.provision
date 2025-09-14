@@ -56,6 +56,17 @@ pipeline {
                 }
             }
         }
+
+        stage('Trigger Deploy Pipeline') {
+            steps {
+                script {
+                    build job: 'deploy-pipeline',   
+                          parameters: [
+                              string(name: 'EC2_IP', value: env.EC2_IP)
+                          ]
+                }
+            }
+        }
     }
 
     post {

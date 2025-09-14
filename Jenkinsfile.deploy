@@ -1,0 +1,61 @@
+pipeline {
+    agent any
+
+    parameters {
+        string(name: 'EC2_IP', defaultValue: '', description: 'Public IP of provisioned EC2')
+    }
+
+    stages {
+
+        stage('Build Docker Image') {
+            steps {
+                script {
+                    def timestamp = sh(script: "date +%Y%m%d-%H%M%S", returnStdout: true).trim()
+                    writeFile file: 'index.html', text: "<h1>Build #${env.BUILD_NUMBER} - ${timestamp}</h1>"
+                    
+                    sh """
+                        docker build -t nginx-ci:${env.BUILD_NUMBER} \
+                          --build-arg BUILD_NUMBER=${env.BUILD_NUMBER} \
+                          --build-arg TIMESTAMP=${timestamp} \
+                          -f- . <<'EOF'
+                        FROM nginx:alpine
+                        COPY index.html /usr/share/nginx/html/index.html
+                        EOF
+                    """
+                }
+            }
+        }
+
+        stage('Push to Docker Hub') {
+            steps {
+                withCredentials([usernamePassword(credentialsId: 'DockerHub_cred',
+                                                 usernameVariable: 'DOCKER_USER',
+                                                 passwordVariable: 'DOCKER_PASS')]) {
+                    script {
+                        sh """
+                            echo "$DOCKER_PASS" | docker login -u "$DOCKER_USER" --password-stdin
+                            docker tag nginx-ci:${env.BUILD_NUMBER} docker.io/${DOCKER_USER}/nginx-ci:${env.BUILD_NUMBER}
+                            docker push docker.io/${DOCKER_USER}/nginx-ci:${env.BUILD_NUMBER}
+                        """
+                    }
+                }
+            }
+        }
+
+        stage('Deploy on EC2') {
+            steps {
+                withCredentials([file(credentialsId: 'AWS_SSH_FILE', variable: 'SSH_KEY_FILE')]) {
+                    script {
+                        sh """
+                            ssh -o StrictHostKeyChecking=no -i ${SSH_KEY_FILE} ec2-user@${params.EC2_IP} '
+                                docker rm -f web || true &&
+                                docker run -d --name web -p 80:80 docker.io/${DOCKER_USER}/nginx-ci:${BUILD_NUMBER}
+                            '
+                            curl -v http://${params.EC2_IP}
+                        """
+                    }
+                }
+            }
+        }
+    }
+}

@@ -39,20 +39,22 @@ pipeline {
         }
 
         stage('Deploy on EC2') {
-            steps {
-                withCredentials([file(credentialsId: 'AWS_SSH_FILE', variable: 'SSH_KEY_FILE')]) {
-                    script {
-                        sh """
-                            ssh -o StrictHostKeyChecking=no -i ${SSH_KEY_FILE} ec2-user@${params.EC2_IP} '
-                                docker rm -f web-${BUILD_NUMBER} || true &&
-                                docker run -d --name web-${BUILD_NUMBER} -p 80:80 docker.io/mohamed710/nginx-ci:${BUILD_NUMBER}
-                            '
-                            curl -v http://${params.EC2_IP}
-                        """
-                    }
-                }
+         steps {
+             withCredentials([file(credentialsId: 'AWS_SSH_FILE', variable: 'SSH_KEY_FILE')]) {
+                 script {
+                   sh """
+                    ssh -o StrictHostKeyChecking=no -i ${SSH_KEY_FILE} ec2-user@${params.EC2_IP} '
+                        docker ps -a --filter "name=web-" --format "{{.ID}}" | xargs -r docker rm -f
+                        
+                        docker run -d --name web-${BUILD_NUMBER} -p 80:80 docker.io/mohamed710/nginx-ci:${BUILD_NUMBER}
+                    '
+                    curl -v http://${params.EC2_IP}
+                  """
             }
         }
+    }
+}
+
     }
 
     post {

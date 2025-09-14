@@ -44,14 +44,26 @@ pipeline {
                     script {
                         sh """
                             ssh -o StrictHostKeyChecking=no -i ${SSH_KEY_FILE} ec2-user@${params.EC2_IP} '
-                                docker rm -f web || true &&
-                                docker run -d --name web -p 80:80 docker.io/mohamed710/nginx-ci:${BUILD_NUMBER}
+                                docker rm -f web-${BUILD_NUMBER} || true &&
+                                docker run -d --name web-${BUILD_NUMBER} -p 80:80 docker.io/mohamed710/nginx-ci:${BUILD_NUMBER}
                             '
                             curl -v http://${params.EC2_IP}
                         """
                     }
                 }
             }
+        }
+    }
+
+    post {
+        success {
+            echo "✅ Build #${env.BUILD_NUMBER} succeeded and deployed on EC2 ${params.EC2_IP}"
+        }
+        failure {
+            echo "❌ Build #${env.BUILD_NUMBER} failed! Check logs."
+        }
+        always {
+            echo "📦 Pipeline finished. Cleanup or notifications can go here."
         }
     }
 }

@@ -30,8 +30,8 @@ pipeline {
                     script {
                         sh """
                             echo "$DOCKER_PASS" | docker login -u "$DOCKER_USER" --password-stdin
-                            docker tag nginx-ci:${env.BUILD_NUMBER} docker.io/${DOCKER_USER}/nginx-ci:${env.BUILD_NUMBER}
-                            docker push docker.io/${DOCKER_USER}/nginx-ci:${env.BUILD_NUMBER}
+                            docker tag nginx-ci:${env.BUILD_NUMBER} docker.io/mohamed710/nginx-ci:${env.BUILD_NUMBER}
+                            docker push docker.io/mohamed710/nginx-ci:${env.BUILD_NUMBER}
                         """
                     }
                 }
@@ -45,7 +45,7 @@ pipeline {
                         sh """
                             ssh -o StrictHostKeyChecking=no -i ${SSH_KEY_FILE} ec2-user@${params.EC2_IP} '
                                 docker rm -f web || true &&
-                                docker run -d --name web -p 80:80 docker.io/${DOCKER_USER}/nginx-ci:${BUILD_NUMBER}
+                                docker run -d --name web -p 80:80 docker.io/mohamed710/nginx-ci:${BUILD_NUMBER}
                             '
                             curl -v http://${params.EC2_IP}
                         """

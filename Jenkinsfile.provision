@@ -1,69 +1,55 @@
 pipeline {
     agent any
 
-    triggers {
-        githubPush()
+    parameters {
+        string(name: 'EC2_IP', defaultValue: '', description: 'Public IP of provisioned EC2')
     }
 
     stages {
 
-        stage('Terraform Init & Apply') {
-            steps {
-                dir('terraform') {
-                    withCredentials([[$class: 'AmazonWebServicesCredentialsBinding',
-                                      credentialsId: 'AWS_Creds']]) {
-                        sh '''
-                            export AWS_ACCESS_KEY_ID=$AWS_ACCESS_KEY_ID
-                            export AWS_SECRET_ACCESS_KEY=$AWS_SECRET_ACCESS_KEY
-                            terraform init -backend-config=backend.hcl
-                            terraform apply -auto-approve
-                        '''
-                    }
-                }
-            }
-        }
-
-        stage('Get EC2 IP') {
-            steps {
-                dir('terraform') {
-                    withCredentials([[$class: 'AmazonWebServicesCredentialsBinding',
-                                      credentialsId: 'AWS_Creds']]) {
-                        script {
-                            EC2_IP = sh(
-                                script: "terraform output -raw public_ip",
-                                returnStdout: true
-                            ).trim()
-                            echo "EC2 IP: ${EC2_IP}"
-                            writeFile file: 'EC2_IP.txt', text: EC2_IP
-                            env.EC2_IP = EC2_IP
-                        }
-                    }
-                }
-            }
-        }
-
-        stage('Ansible Configure') {
-            environment {
-                ANSIBLE_HOST_KEY_CHECKING = 'False'
-            }
-            steps {
-                withCredentials([file(credentialsId: 'AWS_SSH_FILE', variable: 'SSH_KEY_FILE')]) {
-                    ansiblePlaybook(
-                        playbook: 'ansible/playbook.yml',
-                        inventory: "${env.EC2_IP},",
-                        extras: "-u ec2-user --private-key=${SSH_KEY_FILE} --ssh-extra-args='-o StrictHostKeyChecking=no'"
-                    )
-                }
-            }
-        }
-
-        stage('Trigger Deploy Pipeline') {
+        stage('Build Docker Image') {
             steps {
                 script {
-                    build job: 'deploy-pipline',   
-                          parameters: [
-                              string(name: 'EC2_IP', value: env.EC2_IP)
-                          ]
+                    def timestamp = sh(script: "date +%Y%m%d-%H%M%S", returnStdout: true).trim()
+                    writeFile file: 'index.html', text: "<h1>Build #${env.BUILD_NUMBER} - ${timestamp}</h1>"
+                    
+                    sh """
+                        docker build -t nginx-ci:${env.BUILD_NUMBER} \
+                          --build-arg BUILD_NUMBER=${env.BUILD_NUMBER} \
+                          --build-arg TIMESTAMP=${timestamp} .
+                    """
+                }
+            }
+        }
+
+        stage('Push to Docker Hub') {
+            steps {
+                withCredentials([usernamePassword(credentialsId: 'DockerHub_cred',
+                                                 usernameVariable: 'DOCKER_USER',
+                                                 passwordVariable: 'DOCKER_PASS')]) {
+                    script {
+                        sh """
+                            echo "$DOCKER_PASS" | docker login -u "$DOCKER_USER" --password-stdin
+                            docker tag nginx-ci:${env.BUILD_NUMBER} docker.io/mohamed710/nginx-ci:${env.BUILD_NUMBER}
+                            docker push docker.io/mohamed710/nginx-ci:${env.BUILD_NUMBER}
+                        """
+                    }
+                }
+            }
+        }
+
+        stage('Deploy on EC2') {
+            steps {
+                withCredentials([file(credentialsId: 'AWS_SSH_FILE', variable: 'SSH_KEY_FILE')]) {
+                    script {
+                        sh """
+                            ssh -o StrictHostKeyChecking=no -i ${SSH_KEY_FILE} ec2-user@${params.EC2_IP} '
+                                docker rm -f web-${BUILD_NUMBER} || true &&
+                                docker run -d --name web-${BUILD_NUMBER} -p 80:80 docker.io/mohamed710/nginx-ci:${BUILD_NUMBER}
+                            '
+                            curl -v http://${params.EC2_IP}
+                        """
+                    }
                 }
             }
         }
@@ -71,7 +57,13 @@ pipeline {
 
     post {
         success {
-            archiveArtifacts artifacts: 'terraform/EC2_IP.txt', fingerprint: true
+            echo "✅ Build #${env.BUILD_NUMBER} succeeded and deployed on EC2 ${params.EC2_IP}"
+        }
+        failure {
+            echo "❌ Build #${env.BUILD_NUMBER} failed! Check logs."
+        }
+        always {
+            echo "📦 Pipeline finished. Cleanup or notifications can go here."
         }
     }
 }

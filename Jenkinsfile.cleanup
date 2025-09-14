@@ -25,14 +25,14 @@ pipeline {
                     script {
                         def instances = sh(script: """
                             aws ec2 describe-instances \
-                            --filters "Name=tag:lifespan,Values=ephemeral" "Name=instance-state-name,Values=running" \
+                            --filters "Name=tag:lifespan,Values=ephemeral" "Name=instance-state-name,Values=running" --region us-east-1 \
                             --query "Reservations[].Instances[].InstanceId" \
                             --output text
                         """, returnStdout: true).trim()
 
                         if (instances) {
                             echo "Terminating ephemeral instances: ${instances}"
-                            sh "aws ec2 terminate-instances --instance-ids ${instances}"
+                            sh "aws ec2 terminate-instances --instance-ids ${instances} --region us-east-1"
                         } else {
                             echo "No ephemeral instances found."
                         }
